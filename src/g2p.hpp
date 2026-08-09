@@ -7,6 +7,7 @@ namespace kokoro {
 // Top-level grapheme->phoneme front end. Routes by voice language:
 //   a -> American English   b -> British English   (misaki dict + espeak OOV)
 //   e -> es   f -> fr-fr   h -> hi   i -> it   p -> pt-br   (espeak + per-lang E2M)
+//   sveta/masha/dima (or r*) -> Russian (custom espeak-data + ru_g2p postprocess)
 //   j/z (Japanese/Chinese) are unsupported (need OpenJTalk / jieba) and fall
 //   back to American English with a warning.
 //

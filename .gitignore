@@ -1,11 +1,11 @@
-# ---- Python ----
+# ---- Host tooling (build.py: PyTorch -> ONNX -> RKNN) ----
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
 
-# ---- C++ / CMake build output ----
+# ---- C++ / CMake ----
 build/
 cmake-build-*/
 compile_commands.json
@@ -13,28 +13,41 @@ compile_commands.json
 *.a
 *.so
 
-# ---- Profiling / runtime scratch ----
-run.log
+# ---- Runtime & test scratch ----
+*.wav
 *.log
+run.log
 dumps/
 uploads/
 
-# ---- Upstream weights & vendored repos (fetch separately, see README) ----
+# ---- Model packs (per-voice ONNX/RKNN; see README) ----
+models/
+
+# ---- Upstream weights (fetch separately; used by build.py) ----
 Kokoro-82M/
 kokoro-src/
 voices_npy/
+onnx/
 
-# ---- Generated model artefacts (regenerate via build.py; too large for git) ----
-# Intermediates
+# ---- Generated artefacts (regenerate via build.py) ----
+*.onnx
+*.rknn
+norm_stats.npz
 onnx/_decoder_raw.onnx
 onnx/_decoder_fixnorm.onnx
 onnx/_decoder_fixnorm_sin.onnx
 onnx/_decoder_final.onnx
-# Stray RKNN toolkit debug dumps
 check[0-9]*_*.onnx
-# Shipped artefacts (commit via Git LFS instead if you want them in the repo)
-*.onnx
-*.rknn
-norm_stats.npz
+
+# ---- Russian espeak-ng data (vendored from zaakirio/kokoro-ru) ----
+# Populate once, e.g. from a HF cache snapshot:
+#   cp -aL ~/.cache/huggingface/hub/models--zaakirio--kokoro-ru/snapshots/*/espeak-data data/espeak-data
+data/espeak-data/
+
+# ---- Vendored server dependency trees (build outputs) ----
+deps/drogon-src/
+deps/drogon-install/
+deps/opusenc-src/
+deps/opusenc-install/
 
 .antigravitycli

@@ -12,6 +12,7 @@
 
 #include "g2p.hpp"
 #include "kokoro.hpp"
+#include "paths.hpp"
 #include "phonemizer.hpp"
 
 using namespace drogon;
@@ -28,11 +29,11 @@ struct RunConfig {
   std::optional<std::filesystem::path> lexiconDir;
   std::optional<std::filesystem::path> webRoot;
   std::string accelerator = "";
-  std::string ip = "127.0.0.1";
+  std::string ip = "0.0.0.0";
   uint16_t port = 8848;
   std::string authToken = "";
   bool disableWebUI = false;
-  std::string defaultVoice = "af_heart";
+  std::string defaultVoice = "sveta";
 };
 
 } // namespace kokoro_server
@@ -47,12 +48,12 @@ namespace {
 void printUsage(const char* prog) {
   std::cerr <<
     "usage: " << prog << " [options]\n\n"
-    "required:\n"
-    "  --encoder FILE        encoder ONNX\n"
-    "  --har-gen FILE        har generator ONNX\n"
-    "  --decoder FILE        decoder .onnx or .rknn\n"
-    "  --vocab FILE          Kokoro config.json (vocab is read from it)\n"
-    "  --voices-dir DIR      directory of voice .npy files\n"
+    "required (defaults resolve from repo root when run from build/):\n"
+    "  --encoder FILE        encoder ONNX (default models/base/kokoro_encoder.onnx)\n"
+    "  --har-gen FILE        har generator ONNX (default models/base/har_generator.onnx)\n"
+    "  --decoder FILE        decoder .onnx or .rknn (default models/base/kokoro_decoder.rknn)\n"
+    "  --vocab FILE          Kokoro config.json (default models/base/config.json)\n"
+    "  --voices-dir DIR      voice .npy files (default models/base/voices_npy)\n"
     "\noptional:\n"
     "  --espeak-data DIR     espeak-ng-data directory (else next to executable)\n"
     "  --lexicon-dir DIR     misaki us/gb JSONs (else ./misaki-data)\n"
@@ -109,33 +110,29 @@ int main(int argc, char** argv) {
   kokoro_server::RunConfig rc;
   parseArgs(argc, argv, rc);
 
-  auto requireArg = [&](const std::filesystem::path& p, const char* flag) {
-    if (p.empty()) {
-      std::cerr << "error: " << flag << " is required\n\n";
-      printUsage(argv[0]);
-      std::exit(1);
-    }
+  const auto root = kokoro::paths::projectRoot();
+  auto defaultPath = [&](const std::filesystem::path& p, const char* rel) {
+    if (!p.empty()) return std::filesystem::path(kokoro::paths::resolve(root, p.string()));
+    return std::filesystem::path(kokoro::paths::defaultModelPath(rel));
   };
-  requireArg(rc.encoderPath, "--encoder");
-  requireArg(rc.harGenPath,  "--har-gen");
-  requireArg(rc.decoderPath, "--decoder");
-  requireArg(rc.vocabPath,   "--vocab");
-  requireArg(rc.voicesDir,   "--voices-dir");
+  rc.encoderPath = defaultPath(rc.encoderPath, "models/base/kokoro_encoder.onnx");
+  rc.harGenPath  = defaultPath(rc.harGenPath,  "models/base/har_generator.onnx");
+  rc.decoderPath = defaultPath(rc.decoderPath, "models/base/kokoro_decoder.rknn");
+  rc.vocabPath   = defaultPath(rc.vocabPath,   "models/base/config.json");
+  rc.voicesDir   = defaultPath(rc.voicesDir,   "models/base/voices_npy");
 
   // espeak data path: explicit, or next to the executable.
   std::string espeakData;
   if (rc.espeakDataPath) {
     espeakData = std::filesystem::absolute(*rc.espeakDataPath).string();
   } else {
-    auto exe = std::filesystem::canonical("/proc/self/exe");
-    espeakData = std::filesystem::absolute(exe.parent_path() / "espeak-ng-data").string();
+    espeakData = (kokoro::paths::exeDir() / "espeak-ng-data").string();
   }
   kokoro::Phonemizer::init(espeakData);
 
-  // misaki lexicon dir: explicit, or "misaki-data" under the current directory.
   std::string lexiconDir =
       rc.lexiconDir ? std::filesystem::absolute(*rc.lexiconDir).string()
-                    : (std::filesystem::current_path() / "misaki-data").string();
+                    : (kokoro::paths::exeDir() / "misaki-data").string();
   kokoro::G2P::init(lexiconDir, espeakData);
 
   kokoro::EngineConfig cfg;
@@ -170,7 +167,9 @@ int main(int argc, char** argv) {
       }
     } else {
       auto cwd = std::filesystem::current_path();
+      auto root = kokoro::paths::projectRoot();
       for (const auto& candidate : {
+             root / "server" / "web-content",
              cwd / "server" / "web-content",
              cwd / "web-content",
            }) {

@@ -16,6 +16,7 @@
 
 #include "g2p.hpp"
 #include "kokoro.hpp"
+#include "paths.hpp"
 #include "phonemizer.hpp"
 
 namespace {
@@ -36,15 +37,15 @@ void writeWav(const std::string& path, const std::vector<int16_t>& pcm, int sr) 
 void usage() {
   std::cerr <<
     "usage: kokoro-cli [--text STR | --phonemes STR] [opts]\n"
-    "  --voice NAME         (default af_heart)\n"
+    "  --voice NAME         (default sveta)\n"
     "  --speed FLOAT        (default 1.0)\n"
     "  --british            use en-gb voice and remap\n"
     "  --out FILE           output wav (default out.wav)\n"
-    "  --encoder FILE       onnx/kokoro_encoder.onnx\n"
-    "  --har-gen FILE       onnx/har_generator.onnx\n"
-    "  --decoder FILE       onnx/kokoro_decoder.onnx or .rknn\n"
-    "  --vocab FILE         Kokoro-82M/config.json\n"
-    "  --voices-dir DIR     voices_npy\n"
+    "  --encoder FILE       models/base/kokoro_encoder.onnx\n"
+    "  --har-gen FILE       models/base/har_generator.onnx\n"
+    "  --decoder FILE       models/base/kokoro_decoder.rknn\n"
+    "  --vocab FILE         models/base/config.json\n"
+    "  --voices-dir DIR     models/base/voices_npy\n"
     "  --espeak-data DIR    espeak-ng-data (else next to executable)\n"
     "  --lexicon-dir DIR    misaki us/gb JSONs (else next to executable)\n"
     "  --accelerator STR    cuda | tensorrt | (empty)\n"
@@ -57,13 +58,13 @@ int main(int argc, char** argv) {
   spdlog::set_default_logger(spdlog::stderr_color_st("kokoro"));
 
   std::string text, phonemes;
-  std::string voice = "af_heart";
+  std::string voice = "sveta";
   std::string out   = "out.wav";
-  std::string encoderPath = "onnx/kokoro_encoder.onnx";
-  std::string harGenPath  = "onnx/har_generator.onnx";
-  std::string decoderPath = "onnx/kokoro_decoder.rknn";
-  std::string vocabPath   = "Kokoro-82M/config.json";
-  std::string voicesDir   = "voices_npy";
+  std::string encoderPath = "models/base/kokoro_encoder.onnx";
+  std::string harGenPath  = "models/base/har_generator.onnx";
+  std::string decoderPath = "models/base/kokoro_decoder.rknn";
+  std::string vocabPath   = "models/base/config.json";
+  std::string voicesDir   = "models/base/voices_npy";
   std::string accelerator = "";
   std::string espeakData  = "";
   std::string lexiconDir  = "";
@@ -96,18 +97,23 @@ int main(int argc, char** argv) {
   }
 
   if (text.empty() && phonemes.empty()) {
-    phonemes = "h\xC9\x99l\xCB\x88O w\xCB\x88\xC9\x9C\xC9\xB9ld"; // həlˈO wˈɜɹld
-    spdlog::info("(no --text/--phonemes; using demo string)");
+    text = "Привет, как дела?";
+    spdlog::info("(no --text/--phonemes; using Russian demo string)");
   }
 
-  if (espeakData.empty()) {
-    auto exe = std::filesystem::canonical("/proc/self/exe");
-    espeakData = std::filesystem::absolute(exe.parent_path() / "espeak-ng-data").string();
-  }
+  const auto root = kokoro::paths::projectRoot();
+  encoderPath = kokoro::paths::resolve(root, encoderPath);
+  harGenPath  = kokoro::paths::resolve(root, harGenPath);
+  decoderPath = kokoro::paths::resolve(root, decoderPath);
+  vocabPath   = kokoro::paths::resolve(root, vocabPath);
+  voicesDir   = kokoro::paths::resolve(root, voicesDir);
+
+  if (espeakData.empty())
+    espeakData = (kokoro::paths::exeDir() / "espeak-ng-data").string();
   kokoro::Phonemizer::init(espeakData);
 
   if (lexiconDir.empty())
-    lexiconDir = (std::filesystem::current_path() / "misaki-data").string();
+    lexiconDir = (kokoro::paths::exeDir() / "misaki-data").string();
   kokoro::G2P::init(lexiconDir, espeakData);
 
   kokoro::EngineConfig cfg;

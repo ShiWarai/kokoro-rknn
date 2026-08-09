@@ -1,59 +1,273 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="UTF-8">
-    <title>TTS powered by Streaming Piper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kokoro TTS</title>
     <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #0f1419;
+            --panel: #1a2332;
+            --border: #2d3a4f;
+            --text: #e8eef7;
+            --muted: #8b9cb3;
+            --accent: #3d8bfd;
+            --accent-hover: #5ca0ff;
+            --danger: #f87171;
+            --ok: #4ade80;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f4f7fb;
+                --panel: #ffffff;
+                --border: #d8e0ec;
+                --text: #152033;
+                --muted: #5c6b82;
+                --accent: #2563eb;
+                --accent-hover: #1d4ed8;
+                --danger: #dc2626;
+                --ok: #16a34a;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: sans-serif;
-            font-size: 1.3em;
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text);
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(61, 139, 253, 0.18), transparent),
+                var(--bg);
         }
 
         #container {
+            max-width: 720px;
             margin: 0 auto;
-            max-width: 1200px;
+            padding: 2rem 1.25rem 3rem;
+        }
+
+        header {
+            margin-bottom: 1.75rem;
+        }
+
+        h1 {
+            margin: 0 0 0.35rem;
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.25rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
         #txt_input {
             width: 100%;
-            height: 100px;
-            font-size: 1.1em;
+            min-height: 9rem;
+            margin-bottom: 1rem;
+            padding: 0.85rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font: inherit;
+            font-size: 1.05rem;
+            color: var(--text);
+            background: transparent;
+            resize: vertical;
+        }
+
+        #txt_input:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 520px) {
+            .row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        select,
+        input[type="range"] {
+            width: 100%;
+        }
+
+        select {
+            padding: 0.65rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font: inherit;
+            color: var(--text);
+            background: transparent;
+        }
+
+        .speed-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        #speed_value {
+            min-width: 2.5rem;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
         }
 
         #btn_run {
             width: 100%;
-            height: 50px;
-            font-size: 1.1em;
+            margin-top: 0.25rem;
+            padding: 0.85rem 1rem;
+            border: none;
+            border-radius: 10px;
+            font: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent);
+            cursor: pointer;
+            transition: background 0.15s;
         }
-        #speaker_select {
-            width: 50%;
-            height: 50px;
-            font-size: 1.1em;
+
+        #btn_run:hover:not(:disabled) {
+            background: var(--accent-hover);
         }
-        label {
-            font-size: 1.1em;
+
+        #btn_run:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
-        .greyout-text {
-            opacity: 0.5;
+
+        #status {
+            margin-top: 1rem;
+            min-height: 1.25rem;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        #status.error {
+            color: var(--danger);
+        }
+
+        #status.ok {
+            color: var(--ok);
+        }
+
+        #player_wrap {
+            margin-top: 1rem;
+            display: none;
+        }
+
+        #player_wrap.visible {
+            display: block;
+        }
+
+        audio {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        #btn_download {
+            padding: 0.45rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font: inherit;
+            font-size: 0.9rem;
+            color: var(--text);
+            background: transparent;
+            cursor: pointer;
+        }
+
+        #btn_download:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        footer {
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--muted);
+            text-align: center;
         }
     </style>
 </head>
 
 <body>
-  <div id="container" style="max-width: 1200px; margin: 0 auto;">
-    <h1>Kokoro TTS</h1>
-    <p>Enter text to be spoken and click the button to hear it.</p>
-    <textarea id="txt_input" style="width: 100%; height: 11em; resize: vertical">C++ is a high-level, general-purpose programming language created by Danish computer scientist Bjarne Stroustrup. </textarea>
-    <div style="display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 0.5em; margin-top: 1em">
-        <label id="speaker_select_label" for="speaker_select">Speaker:</label>
-        <select id="speaker_select">
-            <!-- Will be populated by JS -->
-        </select>
+    <div id="container">
+        <header>
+            <h1>Kokoro TTS</h1>
+            <p class="subtitle">Русский синтез речи на C++ · RK3588 NPU · kokoro-server</p>
+        </header>
+
+        <div class="panel">
+            <label for="txt_input">Текст</label>
+            <textarea id="txt_input" placeholder="Введите русский текст…">Привет! Это Kokoro TTS на C++ с поддержкой русского языка.</textarea>
+
+            <div class="row">
+                <div>
+                    <label for="voice_select">Голос</label>
+                    <select id="voice_select" disabled>
+                        <option value="">Загрузка…</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="speed_range">Скорость</label>
+                    <div class="speed-wrap">
+                        <input id="speed_range" type="range" min="0.5" max="2" step="0.05" value="1">
+                        <span id="speed_value">1.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn_run" type="button" disabled>Синтезировать</button>
+            <div id="status" role="status" aria-live="polite"></div>
+
+            <div id="player_wrap">
+                <audio id="audio_out" controls></audio>
+                <button id="btn_download" type="button">Скачать WAV</button>
+            </div>
+        </div>
+
+        <footer>
+            API: <code>POST /api/v1/synthesise</code> · голоса: <code>GET /api/v1/voices</code>
+        </footer>
     </div>
-    <button id="btn_run" onclick="runTTS()">Speak!</button>
-    <script type="text/javascript" src="./pcm-player.js"></script>
-    <script type="text/javascript" src="index.js"></script>
-  </div>
+
+    <script src="index.js"></script>
 </body>
+
 </html>
