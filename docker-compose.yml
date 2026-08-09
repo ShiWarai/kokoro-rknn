@@ -19,8 +19,7 @@ services:
       - /dev/dri:/dev/dri
       - /dev/dma_heap:/dev/dma_heap
     restart: unless-stopped
-    ports:
-      - "${PORT:-8848}:${PORT:-8848}"
+    network_mode: host
     environment:
       KOKORO_DOWNLOAD_MODELS: ${KOKORO_DOWNLOAD_MODELS:-0}
       KOKORO_MODEL_URLS: ${KOKORO_MODEL_URLS:-}

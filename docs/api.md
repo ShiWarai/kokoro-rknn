@@ -1,6 +1,6 @@
 # API
 
-Base URL: `http://127.0.0.1:8848` on the host (port from `PORT` in `.env`).
+Base URL: `http://<host>:8848` (port from `PORT` in `.env`). On the Orange Pi use `127.0.0.1`; from another machine use the Pi's LAN IP (`hostname -I`).
 
 ## Health
 

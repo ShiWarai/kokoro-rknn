@@ -12,7 +12,10 @@ cp .env.example .env
 
 docker compose build          # first build: espeak + drogon (~10–15 min)
 docker compose up -d --wait   # RKNN init ~2–3 с
-curl -fsS http://127.0.0.1:8848/health
+curl -fsS http://127.0.0.1:8848/health   # on the Pi itself
+
+# From another PC/phone use the Pi IP, not localhost:
+#   http://10.0.x.x:8848/
 ```
 
 GHCR image:
