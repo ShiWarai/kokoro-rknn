@@ -1,0 +1,4 @@
+services:
+  kokoro-rknn:
+    image: ghcr.io/shiwarai/kokoro-rknn:main
+    build: !override null

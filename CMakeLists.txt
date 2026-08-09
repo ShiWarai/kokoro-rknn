@@ -22,6 +22,9 @@ endif()
 #   2. Unset → use system install. Arch's onnxruntime-cpu puts headers under
 #      /usr/include/onnxruntime/, which is what the cxx_api expects.
 set(ORT_ROOT "" CACHE STRING "Path to ONNX Runtime root (optional, else system)")
+if(ORT_ROOT STREQUAL "" AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/onnxruntime/include/onnxruntime_cxx_api.h")
+  set(ORT_ROOT "${CMAKE_SOURCE_DIR}/third_party/onnxruntime")
+endif()
 if(ORT_ROOT STREQUAL "")
   find_path(ORT_INCLUDE_DIR onnxruntime_cxx_api.h
     PATHS /usr/include /usr/local/include
@@ -85,7 +88,7 @@ add_library(kokoro
   src/kokoro.cpp
   src/onnx-decoder.cpp)
 
-target_include_directories(kokoro PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(kokoro PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(kokoro
   PUBLIC
     spdlog::spdlog
@@ -101,6 +104,9 @@ target_link_libraries(kokoro
     dl)
 
 if(USE_RKNN)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/rknn/include/rknn_api.h")
+    include_directories(${CMAKE_SOURCE_DIR}/third_party/rknn/include)
+  endif()
   target_sources(kokoro PRIVATE src/rknn-decoder.cpp)
   target_compile_definitions(kokoro PRIVATE USE_RKNN)
   target_link_libraries(kokoro PRIVATE rknnrt)
@@ -111,12 +117,19 @@ if(USE_ORT_CUDA)
 endif()
 
 # Copy runtime data into the build directory (once per build).
+if(EXISTS "${RU_ESPEAK_DATA_DIR}/ru_dict")
+  set(_espeak_stage
+    COMMAND cp -aL ${RU_ESPEAK_DATA_DIR} ${CMAKE_BINARY_DIR}/espeak-ng-data)
+else()
+  set(_espeak_stage
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/espeak-ng-data)
+endif()
 add_custom_target(stage_runtime_data_target ALL
   COMMAND ${CMAKE_COMMAND} -E rm -rf
           ${CMAKE_BINARY_DIR}/misaki-data
           ${CMAKE_BINARY_DIR}/espeak-ng-data
   COMMAND cp -aL ${MISAKI_DATA_DIR} ${CMAKE_BINARY_DIR}/misaki-data
-  COMMAND cp -aL ${RU_ESPEAK_DATA_DIR} ${CMAKE_BINARY_DIR}/espeak-ng-data
+  ${_espeak_stage}
   COMMENT "Staging misaki + Russian espeak data into build dir")
 function(stage_runtime_data tgt)
   add_dependencies(${tgt} stage_runtime_data_target)

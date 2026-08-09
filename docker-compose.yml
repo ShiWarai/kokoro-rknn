@@ -1,0 +1,40 @@
+# Kokoro RKNN API — linux/arm64 (RK3588). Build: docker compose build
+
+name: kokoro-rknn
+
+services:
+  kokoro-rknn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      network: host
+    image: kokoro-rknn-api:latest
+    platform: linux/arm64
+    container_name: kokoro-rknn-api
+    privileged: true
+    devices:
+      - /dev/mpp_service:/dev/mpp_service
+      - /dev/rga:/dev/rga
+      - /dev/dri:/dev/dri
+      - /dev/dma_heap:/dev/dma_heap
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8848}:${PORT:-8848}"
+    environment:
+      KOKORO_DOWNLOAD_MODELS: ${KOKORO_DOWNLOAD_MODELS:-0}
+      KOKORO_MODEL_URLS: ${KOKORO_MODEL_URLS:-}
+      KOKORO_MODELS_DIR: /models
+      KOKORO_DEFAULT_VOICE: ${KOKORO_DEFAULT_VOICE:-sveta}
+      KOKORO_TOKEN: ${KOKORO_TOKEN:-}
+      KOKORO_DISABLE_WEB_UI: ${KOKORO_DISABLE_WEB_UI:-0}
+      HOST: "0.0.0.0"
+      PORT: ${PORT:-8848}
+    volumes:
+      - ${KOKORO_MODELS_DIR}:/models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${PORT:-8848}/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

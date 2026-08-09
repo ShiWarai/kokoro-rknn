@@ -1,0 +1,171 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      publish_prerelease:
+        description: "Build and publish prerelease image to GHCR (tag :prerelease)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+env:
+  IMAGE_NAME: ghcr.io/shiwarai/kokoro-rknn
+
+jobs:
+  test:
+    name: Run tests in Docker
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set runner user for containers
+        run: |
+          echo "RUNNER_UID=$(id -u)" >> $GITHUB_ENV
+          echo "RUNNER_GID=$(id -g)" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: ./Dockerfile
+          target: dev
+          tags: kokoro-rknn-dev:latest
+          load: true
+          push: false
+          cache-from: type=gha,scope=kokoro-rknn-dev
+          cache-to: type=gha,mode=max,scope=kokoro-rknn-dev
+
+      - name: Run unit tests in container
+        run: |
+          docker compose -f docker-compose.dev.yml run --rm -T dev bash -lc '
+            set -euo pipefail
+            git submodule update --init --recursive
+            cmake -S . -B build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SERVER=OFF -DBUILD_CLI=OFF -DBUILD_TESTS=ON -DUSE_RKNN=OFF \
+              -DORT_ROOT=/app/third_party/onnxruntime
+            ln -sfn /opt/espeak-ng-data build/espeak-ng-data
+            cmake --build build -j"$(nproc)" test-ru-g2p
+            cd build && ctest -R ru_g2p_unit --output-on-failure
+          '
+
+  publish-prerelease:
+    name: Publish prerelease image to GHCR
+    needs: test
+    if: |
+      needs.test.result == 'success' && (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_prerelease == 'true') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/dev' && contains(github.event.head_commit.message, '[prerelease]'))
+      )
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push kokoro-rknn (prerelease)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          tags: |
+            ${{ env.IMAGE_NAME }}:prerelease
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=kokoro-rknn-prerelease
+          cache-to: type=gha,mode=max,scope=kokoro-rknn-prerelease
+
+  notify-telegram:
+    name: Notify Telegram
+    needs: [test, publish-prerelease]
+    if: always()
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Tests failed
+        if: needs.test.result != 'success'
+        uses: appleboy/telegram-action@v1.0.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *kokoro-rknn: tests failed*
+            Repo: `${{ github.repository }}`
+            Branch: `${{ github.ref_name }}`
+            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+      - name: Tests OK, prerelease failed
+        if: needs.test.result == 'success' && needs.publish-prerelease.result == 'failure'
+        uses: appleboy/telegram-action@v1.0.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *kokoro-rknn: tests OK, prerelease failed*
+            Repo: `${{ github.repository }}`
+            Branch: `${{ github.ref_name }}`
+            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+      - name: Tests OK, prerelease published
+        if: needs.test.result == 'success' && needs.publish-prerelease.result == 'success'
+        uses: appleboy/telegram-action@v1.0.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          disable_notification: true
+          message: |
+            *kokoro-rknn: tests and prerelease OK*
+            Repo: `${{ github.repository }}`
+            Branch: `${{ github.ref_name }}`
+            Image: `ghcr.io/shiwarai/kokoro-rknn:prerelease`
+            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+      - name: Tests OK (no prerelease)
+        if: needs.test.result == 'success' && needs.publish-prerelease.result == 'skipped'
+        uses: appleboy/telegram-action@v1.0.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          disable_notification: true
+          message: |
+            *kokoro-rknn: tests passed*
+            Repo: `${{ github.repository }}`
+            Branch: `${{ github.ref_name }}`
+            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})

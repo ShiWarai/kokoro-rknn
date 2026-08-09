@@ -61,9 +61,9 @@ void printUsage(const char* prog) {
     "  --lexicon-dir DIR     misaki us/gb JSONs (else ./misaki-data)\n"
     "  --web-root DIR        web UI directory (else auto-detect; see below)\n"
     "  --accelerator STR     ONNX accelerator: cuda, tensorrt (default none)\n"
-    "  --default-voice NAME  default voice name (default af_heart)\n"
-    "  --ip ADDR             bind address (default 127.0.0.1)\n"
-    "  --port N              bind port (default 8848)\n"
+    "  --default-voice NAME  default voice name (default sveta)\n"
+    "  --ip ADDR             bind address (default 0.0.0.0; env HOST/KOKORO_IP)\n"
+    "  --port N              bind port (default 8848; env PORT)\n"
     "  --auth [TOKEN]        require bearer token (random if not given)\n"
     "  --disable-web-ui      disable demo web UI\n"
     "  --debug               enable debug logging\n"
@@ -111,10 +111,25 @@ const char* packForVoice(const std::string& voice) {
 
 } // namespace
 
+void applyEnvDefaults(kokoro_server::RunConfig& rc) {
+  if (const char* h = std::getenv("HOST")) rc.ip = h;
+  else if (const char* h = std::getenv("KOKORO_IP")) rc.ip = h;
+  if (const char* p = std::getenv("PORT")) {
+    try {
+      rc.port = static_cast<uint16_t>(std::stoul(p));
+    } catch (...) {
+      throw std::runtime_error("invalid PORT env value");
+    }
+  }
+  if (const char* v = std::getenv("KOKORO_DEFAULT_VOICE"))
+    rc.defaultVoice = v;
+}
+
 int main(int argc, char** argv) {
   spdlog::set_default_logger(spdlog::stderr_color_st("kokoro"));
 
   kokoro_server::RunConfig rc;
+  applyEnvDefaults(rc);
   parseArgs(argc, argv, rc);
 
   if (!rc.modelsDir.empty())
@@ -166,6 +181,18 @@ int main(int argc, char** argv) {
     spdlog::info("Auth token: {}", rc.authToken);
   }
   g_defaultVoice = rc.defaultVoice;
+
+  app().registerHandler(
+      "/health",
+      [](const HttpRequestPtr&,
+         std::function<void(const HttpResponsePtr&)>&& cb) {
+        auto r = HttpResponse::newHttpResponse();
+        r->setStatusCode(k200OK);
+        r->setContentTypeCode(CT_APPLICATION_JSON);
+        r->setBody(R"({"status":"ok"})");
+        cb(r);
+      },
+      {Get});
 
   if (!rc.disableWebUI) {
     std::filesystem::path webDir;

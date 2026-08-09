@@ -1,54 +1,59 @@
-# kokoro-infer
+# kokoro-rknn
 
-Fast, lightweight end-to-end inference engine and server for Kokoro-82M TTS, optimized for CPU, CUDA, and Rockchip RK3588 NPU.
+Fast Kokoro-82M TTS for **Rockchip RK3588 NPU** (encoder ONNX + decoder RKNN). Russian voices from [ShiWarai/kokoro-rknn-ru](https://huggingface.co/ShiWarai/kokoro-rknn-ru).
 
-Russian models: **[ShiWarai/kokoro-rknn-ru](https://huggingface.co/ShiWarai/kokoro-rknn-ru)**.
-
-Runtime is **C++ only** (`libkokoro`, `kokoro-cli`, `kokoro-server`). `build.py` is only for maintainers re-exporting ONNX/RKNN.
+**Docker-first** runtime (like [whisper-rknn](https://github.com/ShiWarai/whisper-rknn)) — intended for compose / k3s on Orange Pi.
 
 ## Quick start
 
 ```bash
-git submodule update --init --recursive
+cp .env.example .env
+# KOKORO_MODELS_DIR=/home/orangepi/models/kokoro-rknn-ru
 
-# Kokoro weights — subdirectory alongside other models on the board, e.g.:
+docker compose build          # first build: espeak + drogon (~10–15 min)
+docker compose up -d --wait   # RKNN init ~2–3 с
+curl -fsS http://127.0.0.1:8848/health
+```
+
+GHCR image:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+## Docs
+
+| Doc | Content |
+|-----|---------|
+| [docs/models.md](docs/models.md) | Model volume, HF download, NPU devices |
+| [docs/api.md](docs/api.md) | HTTP/WebSocket API |
+| [docs/cicd.md](docs/cicd.md) | GitHub Actions, GHCR tags |
+| [docs/rknn-hacking.md](docs/rknn-hacking.md) | RKNN graph optimizations |
+
+## Models
+
+Clone once on the host (separate from Piper voices in `/home/orangepi/models/`):
+
+```bash
 git clone https://huggingface.co/ShiWarai/kokoro-rknn-ru /home/orangepi/models/kokoro-rknn-ru
+```
 
+Or let the container download on start: `KOKORO_DOWNLOAD_MODELS=ru` in `.env`.
+
+## Native build (maintainers)
+
+```bash
+git submodule update --init --recursive
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DUSE_RKNN=ON \
-         -DBUILD_SERVER=ON -DBUILD_CLI=ON \
-         -DORT_ROOT=/path/to/onnxruntime
-make -j$(nproc)
+cmake .. -DUSE_RKNN=ON -DBUILD_SERVER=ON -DORT_ROOT=/path/to/onnxruntime
+make -j$(nproc) kokoro-server
 
 export KOKORO_MODELS_DIR=/home/orangepi/models/kokoro-rknn-ru
-
-./kokoro-cli --text "Привет!" --voice sveta --out hello.wav
 ./kokoro-server --ip 0.0.0.0 --port 8848
 ```
 
-`KOKORO_MODELS_DIR` (or `--models-dir`) must point at the **kokoro HF clone root** — not the shared `/home/orangepi/models/` tree that also holds piper voices (`denis`, `irina`, …) and `hf/`.
+`build.py` — host-side ONNX/RKNN export only.
 
-Inside that root the code looks for packs as `packs/base/` (HF layout) or flat `base/`:
+## License
 
-| Pack | Voices |
-|------|--------|
-| `base` | sveta, masha |
-| `dima` | dima |
-
-Russian espeak data (for G2P):
-
-```bash
-cp -aL ~/.cache/huggingface/hub/models--zaakirio--kokoro-ru/snapshots/*/espeak-data data/espeak-data
-```
-
-## Server deps
-
-Drogon + libopusenc are vendored under `deps/` — build once (see prior commits / board notes).
-
-## Maintainer
-
-`python3 build.py` → push `packs/*` to [ShiWarai/kokoro-rknn-ru](https://huggingface.co/ShiWarai/kokoro-rknn-ru).
-
-## Optimizations
-
-See `ON_RKNN_HACKING.md`.
+MIT. Rockchip `librknnrt.so` in `third_party/` — vendor terms apply.

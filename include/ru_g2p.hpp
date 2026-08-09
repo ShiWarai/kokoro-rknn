@@ -5,8 +5,8 @@
 namespace kokoro {
 
 // Russian grapheme-to-phoneme for Kokoro-82M (zaakirio/kokoro-ru).
-// Uses acute-aware espeak-ng data (data/espeak-data) plus orthoepic
-// respelling, IPA normalization, and positional vowel reduction from ru_g2p.py.
+// Uses acute-aware espeak-ng data (baked into Docker image at bin/espeak-ng-data),
+// orthoepic respelling, IPA normalization, and positional vowel reduction from ru_g2p.py.
 // Stress marking relies on espeak's Russian dictionary when RUAccent is not
 // available at runtime.
 class RuG2P {
