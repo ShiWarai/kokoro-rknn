@@ -57,11 +57,12 @@ jobs:
           docker compose -f docker-compose.dev.yml run --rm -T dev bash -lc '
             set -euo pipefail
             git submodule update --init --recursive
+            rm -rf build
             cmake -S . -B build \
               -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SERVER=OFF -DBUILD_CLI=OFF -DBUILD_TESTS=ON -DUSE_RKNN=OFF \
-              -DORT_ROOT=/app/third_party/onnxruntime
-            ln -sfn /opt/espeak-ng-data build/espeak-ng-data
+              -DORT_ROOT=/app/third_party/onnxruntime \
+              -DRU_ESPEAK_DATA_DIR=/opt/espeak-ng-data
             cmake --build build -j"$(nproc)" --target test-ru-g2p
             cd build && ctest -R ru_g2p_unit --output-on-failure
           '

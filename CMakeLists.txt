@@ -76,7 +76,12 @@ endif()
 set(MISAKI_BUILD_TOOLS OFF CACHE BOOL "" FORCE)  # no misaki-cli/test in this build
 add_subdirectory(misaki-cpp)
 set(MISAKI_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/misaki-cpp/data")
-set(RU_ESPEAK_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/espeak-data")
+set(RU_ESPEAK_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/espeak-data"
+    CACHE PATH "Russian espeak-ng-data tree (staged into build dir for tests)")
+if(NOT EXISTS "${RU_ESPEAK_DATA_DIR}/ru_dict"
+   AND EXISTS "/opt/espeak-ng-data/ru_dict")
+  set(RU_ESPEAK_DATA_DIR "/opt/espeak-ng-data" CACHE PATH "" FORCE)
+endif()
 
 # ============== libkokoro ================================================
 add_library(kokoro
@@ -117,6 +122,11 @@ if(USE_ORT_CUDA)
 endif()
 
 # Copy runtime data into the build directory (once per build).
+if(BUILD_TESTS AND NOT EXISTS "${RU_ESPEAK_DATA_DIR}/ru_dict")
+  message(FATAL_ERROR
+    "BUILD_TESTS requires Russian espeak-ng-data at ${RU_ESPEAK_DATA_DIR} "
+    "(e.g. -DRU_ESPEAK_DATA_DIR=/opt/espeak-ng-data in the dev container)")
+endif()
 if(EXISTS "${RU_ESPEAK_DATA_DIR}/ru_dict")
   set(_espeak_stage
     COMMAND cp -aL ${RU_ESPEAK_DATA_DIR} ${CMAKE_BINARY_DIR}/espeak-ng-data)
