@@ -16,6 +16,15 @@ On the Orange Pi, keep Kokoro separate from other TTS models (Piper voices, etc.
 
 Russian **espeak-ng-data** is baked into the Docker image (`bin/espeak-ng-data/`), not stored on the models volume.
 
+Both packs load at server start when present:
+
+| Pack | Voices |
+|------|--------|
+| `packs/base` | sveta, masha |
+| `packs/dima` | dima |
+
+OpenAI model ids: `kokoro-base`, `kokoro-dima`, `tts-1` (alias for base). See [api.md](api.md).
+
 Set in `.env`:
 
 ```bash

@@ -3,11 +3,14 @@
     const voiceEl = document.getElementById('voice_select');
     const speedEl = document.getElementById('speed_range');
     const speedValEl = document.getElementById('speed_value');
+    const tokenEl = document.getElementById('api_token');
     const btnRun = document.getElementById('btn_run');
     const statusEl = document.getElementById('status');
     const playerWrap = document.getElementById('player_wrap');
     const audioEl = document.getElementById('audio_out');
     const btnDownload = document.getElementById('btn_download');
+
+    const TOKEN_KEY = 'kokoro_api_token';
 
     let lastBlob = null;
     let busy = false;
@@ -23,19 +26,32 @@
         btnRun.textContent = on ? 'Синтез…' : 'Синтезировать';
     }
 
+    function authHeaders() {
+        const token = tokenEl.value.trim();
+        if (!token) return {};
+        return { Authorization: 'Bearer ' + token };
+    }
+
     speedEl.addEventListener('input', function () {
         speedValEl.textContent = Number(speedEl.value).toFixed(2);
     });
 
+    tokenEl.addEventListener('change', function () {
+        localStorage.setItem(TOKEN_KEY, tokenEl.value.trim());
+    });
+
+    const saved = localStorage.getItem(TOKEN_KEY);
+    if (saved) tokenEl.value = saved;
+
     async function loadVoices() {
         try {
-            const res = await fetch('/api/v1/voices');
+            const res = await fetch('/api/v1/voices', { headers: authHeaders() });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const voices = await res.json();
             voiceEl.innerHTML = '';
             if (!Array.isArray(voices) || voices.length === 0) {
                 voiceEl.innerHTML = '<option value="">(нет голосов)</option>';
-                setStatus('Сервер не вернул голоса — проверьте --voices-dir', 'error');
+                setStatus('Сервер не вернул голоса — проверьте модели', 'error');
                 return;
             }
             for (const name of voices) {
@@ -86,7 +102,7 @@
         try {
             const res = await fetch('/api/v1/synthesise', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -101,7 +117,7 @@
             try {
                 await audioEl.play();
             } catch (_) {
-                /* autoplay blocked — user can press play */
+                /* autoplay blocked */
             }
         } catch (err) {
             setStatus('Ошибка: ' + err.message, 'error');

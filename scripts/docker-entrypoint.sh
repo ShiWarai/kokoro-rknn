@@ -24,6 +24,8 @@ if [[ -n "${KOKORO_DEFAULT_VOICE:-}" ]]; then
 fi
 if [[ -n "${KOKORO_TOKEN:-}" ]]; then
   args+=(--auth "${KOKORO_TOKEN}")
+elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  args+=(--auth "${OPENAI_API_KEY}")
 fi
 if [[ "${KOKORO_DISABLE_WEB_UI:-0}" == "1" ]]; then
   args+=(--disable-web-ui)

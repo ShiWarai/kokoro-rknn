@@ -115,7 +115,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY docker/apt.conf /etc/apt/apt.conf.d/99-docker-build
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
+ && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/bin/kokoro-server /opt/kokoro-rknn/bin/

@@ -217,6 +217,17 @@
             color: var(--accent);
         }
 
+        #api_token {
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font: inherit;
+            color: var(--text);
+            background: var(--bg);
+        }
+
         footer {
             margin-top: 1.5rem;
             font-size: 0.8rem;
@@ -247,11 +258,14 @@
                 <div>
                     <label for="speed_range">Скорость</label>
                     <div class="speed-wrap">
-                        <input id="speed_range" type="range" min="0.5" max="2" step="0.05" value="1">
+                        <input id="speed_range" type="range" min="0.25" max="4" step="0.05" value="1">
                         <span id="speed_value">1.0</span>
                     </div>
                 </div>
             </div>
+
+            <label for="api_token">API token (если задан KOKORO_TOKEN)</label>
+            <input id="api_token" type="password" placeholder="Bearer token (сохраняется локально)" autocomplete="off">
 
             <button id="btn_run" type="button" disabled>Синтезировать</button>
             <div id="status" role="status" aria-live="polite"></div>
@@ -263,7 +277,7 @@
         </div>
 
         <footer>
-            API: <code>POST /api/v1/synthesise</code> · голоса: <code>GET /api/v1/voices</code>
+            API: <code>POST /v1/audio/speech</code> · <code>GET /v1/models</code> · native <code>/api/v1/synthesise</code>
         </footer>
     </div>
 

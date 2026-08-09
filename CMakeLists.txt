@@ -174,6 +174,8 @@ if(BUILD_SERVER)
   add_executable(kokoro-server
     server/main.cpp
     server/api.cpp
+    server/engine_pool.cpp
+    server/mp3_encoder.cpp
     server/OggOpusEncoder.cpp)
 
   target_include_directories(kokoro-server PRIVATE
