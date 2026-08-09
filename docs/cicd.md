@@ -25,7 +25,7 @@ docker compose -f docker-compose.dev.yml run --rm -T dev bash -lc '
     -DBUILD_SERVER=OFF -DBUILD_CLI=OFF -DBUILD_TESTS=ON -DUSE_RKNN=OFF \
     -DORT_ROOT=/app/third_party/onnxruntime
   ln -sfn /opt/espeak-ng-data build/espeak-ng-data
-  cmake --build build -j$(nproc) test-ru-g2p
+  cmake --build build -j$(nproc) --target test-ru-g2p
   cd build && ctest -R ru_g2p_unit --output-on-failure
 '
 ```
