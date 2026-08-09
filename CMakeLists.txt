@@ -81,6 +81,7 @@ add_library(kokoro
   src/phonemizer.cpp
   src/g2p.cpp
   src/ru_g2p.cpp
+  src/paths.cpp
   src/kokoro.cpp
   src/onnx-decoder.cpp)
 
@@ -177,14 +178,7 @@ if(BUILD_TESTS)
   if(BUILD_CLI AND USE_RKNN)
     add_test(
       NAME cli_russian_npu
-      COMMAND kokoro-cli
-        --text "Привет"
-        --voice sveta
-        --encoder ${CMAKE_SOURCE_DIR}/models/base/kokoro_encoder.onnx
-        --har-gen ${CMAKE_SOURCE_DIR}/models/base/har_generator.onnx
-        --decoder ${CMAKE_SOURCE_DIR}/models/base/kokoro_decoder.rknn
-        --vocab ${CMAKE_SOURCE_DIR}/models/base/config.json
-        --voices-dir ${CMAKE_SOURCE_DIR}/models/base/voices_npy
+      COMMAND kokoro-cli --text "Привет" --voice sveta
         --out ${CMAKE_BINARY_DIR}/test-out.wav
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
     set_tests_properties(cli_russian_npu PROPERTIES

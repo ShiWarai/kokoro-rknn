@@ -2,39 +2,21 @@
 
 #include <filesystem>
 #include <string>
-#include <vector>
 
 namespace kokoro::paths {
 
-inline std::filesystem::path exeDir() {
-  return std::filesystem::canonical("/proc/self/exe").parent_path();
-}
+// Model repo root passed via --models-dir or KOKORO_MODELS_DIR.
+// Pack layout: <root>/<pack>/ or <root>/packs/<pack>/ (HF clone root).
+void setModelsDir(std::filesystem::path dir);
+std::filesystem::path modelsDir();
 
-// Locate repo root by looking for models/base/config.json near the binary or CWD.
-inline std::filesystem::path projectRoot() {
-  std::vector<std::filesystem::path> candidates = {
-      exeDir().parent_path(),
-      exeDir(),
-      std::filesystem::current_path(),
-      std::filesystem::current_path().parent_path(),
-  };
-  for (const auto& root : candidates) {
-    if (std::filesystem::exists(root / "models" / "base" / "config.json"))
-      return std::filesystem::absolute(root);
-  }
-  return std::filesystem::absolute(exeDir().parent_path());
-}
+std::filesystem::path packDir(const char* pack);
+std::string packFile(const char* pack, const char* rel);
 
-inline std::string resolve(const std::filesystem::path& root,
-                           const std::string& path) {
-  std::filesystem::path p(path);
-  if (p.is_absolute() || std::filesystem::exists(p))
-    return std::filesystem::absolute(p).string();
-  return std::filesystem::absolute(root / p).string();
-}
+std::filesystem::path exeDir();
+std::filesystem::path projectRoot();
 
-inline std::string defaultModelPath(const char* rel) {
-  return resolve(projectRoot(), rel);
-}
+// Absolute path, or relative to CWD.
+std::string resolveUserPath(const std::string& path);
 
 } // namespace kokoro::paths

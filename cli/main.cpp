@@ -41,15 +41,20 @@ void usage() {
     "  --speed FLOAT        (default 1.0)\n"
     "  --british            use en-gb voice and remap\n"
     "  --out FILE           output wav (default out.wav)\n"
-    "  --encoder FILE       models/base/kokoro_encoder.onnx\n"
-    "  --har-gen FILE       models/base/har_generator.onnx\n"
-    "  --decoder FILE       models/base/kokoro_decoder.rknn\n"
-    "  --vocab FILE         models/base/config.json\n"
-    "  --voices-dir DIR     models/base/voices_npy\n"
+    "  --models-dir DIR     model repo root (or set KOKORO_MODELS_DIR)\n"
+    "  --encoder FILE       pack file (default: <models-dir>/{pack}/ or packs/{pack}/)\n"
+    "  --har-gen FILE       har generator ONNX\n"
+    "  --decoder FILE       decoder .rknn\n"
+    "  --vocab FILE         config.json\n"
+    "  --voices-dir DIR     voices_npy/\n"
     "  --espeak-data DIR    espeak-ng-data (else next to executable)\n"
     "  --lexicon-dir DIR    misaki us/gb JSONs (else next to executable)\n"
     "  --accelerator STR    cuda | tensorrt | (empty)\n"
     "  --debug\n";
+}
+
+const char* packForVoice(const std::string& voice) {
+  return voice == "dima" ? "dima" : "base";
 }
 
 } // namespace
@@ -60,11 +65,12 @@ int main(int argc, char** argv) {
   std::string text, phonemes;
   std::string voice = "sveta";
   std::string out   = "out.wav";
-  std::string encoderPath = "models/base/kokoro_encoder.onnx";
-  std::string harGenPath  = "models/base/har_generator.onnx";
-  std::string decoderPath = "models/base/kokoro_decoder.rknn";
-  std::string vocabPath   = "models/base/config.json";
-  std::string voicesDir   = "models/base/voices_npy";
+  std::string encoderPath;
+  std::string harGenPath;
+  std::string decoderPath;
+  std::string vocabPath;
+  std::string voicesDir;
+  std::string modelsDir;
   std::string accelerator = "";
   std::string espeakData  = "";
   std::string lexiconDir  = "";
@@ -88,6 +94,7 @@ int main(int argc, char** argv) {
     else if (a == "--decoder")     decoderPath = need();
     else if (a == "--vocab")       vocabPath = need();
     else if (a == "--voices-dir")  voicesDir = need();
+    else if (a == "--models-dir")  modelsDir = need();
     else if (a == "--accelerator") accelerator = need();
     else if (a == "--espeak-data") espeakData = need();
     else if (a == "--lexicon-dir") lexiconDir = need();
@@ -101,12 +108,19 @@ int main(int argc, char** argv) {
     spdlog::info("(no --text/--phonemes; using Russian demo string)");
   }
 
-  const auto root = kokoro::paths::projectRoot();
-  encoderPath = kokoro::paths::resolve(root, encoderPath);
-  harGenPath  = kokoro::paths::resolve(root, harGenPath);
-  decoderPath = kokoro::paths::resolve(root, decoderPath);
-  vocabPath   = kokoro::paths::resolve(root, vocabPath);
-  voicesDir   = kokoro::paths::resolve(root, voicesDir);
+  if (!modelsDir.empty())
+    kokoro::paths::setModelsDir(modelsDir);
+
+  const char* pack = packForVoice(voice);
+  auto pick = [&](const std::string& p, const char* file) {
+    return p.empty() ? kokoro::paths::packFile(pack, file)
+                     : kokoro::paths::resolveUserPath(p);
+  };
+  encoderPath = pick(encoderPath, "kokoro_encoder.onnx");
+  harGenPath  = pick(harGenPath,  "har_generator.onnx");
+  decoderPath = pick(decoderPath, "kokoro_decoder.rknn");
+  vocabPath   = pick(vocabPath,   "config.json");
+  voicesDir   = pick(voicesDir,   "voices_npy");
 
   if (espeakData.empty())
     espeakData = (kokoro::paths::exeDir() / "espeak-ng-data").string();

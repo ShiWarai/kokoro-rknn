@@ -34,6 +34,7 @@ struct RunConfig {
   std::string authToken = "";
   bool disableWebUI = false;
   std::string defaultVoice = "sveta";
+  std::filesystem::path modelsDir;
 };
 
 } // namespace kokoro_server
@@ -48,12 +49,13 @@ namespace {
 void printUsage(const char* prog) {
   std::cerr <<
     "usage: " << prog << " [options]\n\n"
-    "required (defaults resolve from repo root when run from build/):\n"
-    "  --encoder FILE        encoder ONNX (default models/base/kokoro_encoder.onnx)\n"
-    "  --har-gen FILE        har generator ONNX (default models/base/har_generator.onnx)\n"
-    "  --decoder FILE        decoder .onnx or .rknn (default models/base/kokoro_decoder.rknn)\n"
-    "  --vocab FILE          Kokoro config.json (default models/base/config.json)\n"
-    "  --voices-dir DIR      voice .npy files (default models/base/voices_npy)\n"
+    "model paths (<models-dir>/{pack}/ or packs/{pack}/, pack from --default-voice):\n"
+    "  --models-dir DIR      model repo root (or set KOKORO_MODELS_DIR)\n"
+    "  --encoder FILE        kokoro_encoder.onnx\n"
+    "  --har-gen FILE        har_generator.onnx\n"
+    "  --decoder FILE        kokoro_decoder.rknn\n"
+    "  --vocab FILE          config.json\n"
+    "  --voices-dir DIR      voices_npy/\n"
     "\noptional:\n"
     "  --espeak-data DIR     espeak-ng-data directory (else next to executable)\n"
     "  --lexicon-dir DIR     misaki us/gb JSONs (else ./misaki-data)\n"
@@ -83,6 +85,7 @@ void parseArgs(int argc, char** argv, kokoro_server::RunConfig& rc) {
     else if (a == "--decoder")        rc.decoderPath = need(a);
     else if (a == "--vocab")          rc.vocabPath   = need(a);
     else if (a == "--voices-dir")     rc.voicesDir   = need(a);
+    else if (a == "--models-dir")     rc.modelsDir   = need(a);
     else if (a == "--espeak-data")    rc.espeakDataPath = std::filesystem::path(need(a));
     else if (a == "--lexicon-dir")    rc.lexiconDir = std::filesystem::path(need(a));
     else if (a == "--web-root")       rc.webRoot = std::filesystem::path(need(a));
@@ -102,6 +105,10 @@ void parseArgs(int argc, char** argv, kokoro_server::RunConfig& rc) {
   }
 }
 
+const char* packForVoice(const std::string& voice) {
+  return voice == "dima" ? "dima" : "base";
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -110,16 +117,19 @@ int main(int argc, char** argv) {
   kokoro_server::RunConfig rc;
   parseArgs(argc, argv, rc);
 
-  const auto root = kokoro::paths::projectRoot();
-  auto defaultPath = [&](const std::filesystem::path& p, const char* rel) {
-    if (!p.empty()) return std::filesystem::path(kokoro::paths::resolve(root, p.string()));
-    return std::filesystem::path(kokoro::paths::defaultModelPath(rel));
+  if (!rc.modelsDir.empty())
+    kokoro::paths::setModelsDir(rc.modelsDir);
+
+  const char* pack = packForVoice(rc.defaultVoice);
+  auto defaultPath = [&](const std::filesystem::path& p, const char* file) {
+    if (!p.empty()) return std::filesystem::path(kokoro::paths::resolveUserPath(p.string()));
+    return std::filesystem::path(kokoro::paths::packFile(pack, file));
   };
-  rc.encoderPath = defaultPath(rc.encoderPath, "models/base/kokoro_encoder.onnx");
-  rc.harGenPath  = defaultPath(rc.harGenPath,  "models/base/har_generator.onnx");
-  rc.decoderPath = defaultPath(rc.decoderPath, "models/base/kokoro_decoder.rknn");
-  rc.vocabPath   = defaultPath(rc.vocabPath,   "models/base/config.json");
-  rc.voicesDir   = defaultPath(rc.voicesDir,   "models/base/voices_npy");
+  rc.encoderPath = defaultPath(rc.encoderPath, "kokoro_encoder.onnx");
+  rc.harGenPath  = defaultPath(rc.harGenPath,  "har_generator.onnx");
+  rc.decoderPath = defaultPath(rc.decoderPath, "kokoro_decoder.rknn");
+  rc.vocabPath   = defaultPath(rc.vocabPath,   "config.json");
+  rc.voicesDir   = defaultPath(rc.voicesDir,   "voices_npy");
 
   // espeak data path: explicit, or next to the executable.
   std::string espeakData;

@@ -21,6 +21,7 @@ dumps/
 uploads/
 
 # ---- Model packs (per-voice ONNX/RKNN; see README) ----
+# ---- Model packs (legacy local dir; runtime uses HF hub cache) ----
 models/
 
 # ---- Upstream weights (fetch separately; used by build.py) ----
