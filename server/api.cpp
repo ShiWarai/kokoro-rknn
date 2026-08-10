@@ -170,8 +170,6 @@ HttpResponsePtr buildAudioResponse(const std::vector<int16_t>& audio,
                                    const std::string& format, int sr) {
   auto r = HttpResponse::newHttpResponse();
   if (format == "mp3") {
-    if (!kokoro_server::ffmpegAvailable())
-      throw std::runtime_error("mp3 requires ffmpeg in the container");
     auto mp3 = kokoro_server::encodeMp3(audio.data(), audio.size(), sr);
     r->addHeader("Content-Type", "audio/mpeg");
     r->setBody(std::string(reinterpret_cast<const char*>(mp3.data()), mp3.size()));

@@ -171,6 +171,12 @@ if(BUILD_SERVER)
       "libopusenc not found. Build into deps/opusenc-install (see README).")
   endif()
 
+  find_path(LAME_INCLUDE_DIR lame/lame.h)
+  find_library(LAME_LIBRARY NAMES mp3lame)
+  if(NOT LAME_INCLUDE_DIR OR NOT LAME_LIBRARY)
+    message(FATAL_ERROR "libmp3lame not found (install libmp3lame-dev)")
+  endif()
+
   add_executable(kokoro-server
     server/main.cpp
     server/api.cpp
@@ -179,13 +185,14 @@ if(BUILD_SERVER)
     server/OggOpusEncoder.cpp)
 
   target_include_directories(kokoro-server PRIVATE
-    ${OPUS_INCLUDE_DIRS} ${OPUSENC_INCLUDE_DIR})
+    ${OPUS_INCLUDE_DIRS} ${OPUSENC_INCLUDE_DIR} ${LAME_INCLUDE_DIR})
   target_link_libraries(kokoro-server PRIVATE
     kokoro
     Drogon::Drogon
     soxr
     ${OPUSENC_LIBRARY}
     ${OPUS_LIBRARIES}
+    ${LAME_LIBRARY}
     ogg)
   target_precompile_headers(kokoro-server PRIVATE server/pch.hpp)
   stage_runtime_data(kokoro-server)

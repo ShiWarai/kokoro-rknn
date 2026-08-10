@@ -56,7 +56,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates cmake curl \
       libblas-dev libespeak-ng-dev libfmt-dev libjsoncpp-dev libogg-dev \
-      libopenblas-dev libopus-dev libspdlog-dev libsoxr-dev libssl-dev \
+      libmp3lame-dev libopenblas-dev libopus-dev libspdlog-dev libsoxr-dev \
+      libssl-dev \
       libyaml-cpp-dev nlohmann-json3-dev pkg-config uuid-dev zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
@@ -115,7 +116,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY docker/apt.conf /etc/apt/apt.conf.d/99-docker-build
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/bin/kokoro-server /opt/kokoro-rknn/bin/
