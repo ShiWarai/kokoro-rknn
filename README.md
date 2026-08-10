@@ -1,86 +1,62 @@
-# kokoro-infer
+# kokoro-rknn
 
-Fast, lightweight end-to-end inference engine and server for Kokoro-82M TTS, optimized for CPU, CUDA, and Rockchip RK3588 NPU.
+Fast Kokoro-82M TTS for **Rockchip RK3588 NPU** (encoder ONNX + decoder RKNN). Russian voices from [ShiWarai/kokoro-rknn-ru](https://huggingface.co/ShiWarai/kokoro-rknn-ru).
 
-It provides both a Python prototyping pipeline (infer.py) and a production-ready C++ implementation (libkokoro, kokoro-cli, kokoro-server) with an OpenAI-compatible API.
+**Docker-first** runtime (like [whisper-rknn](https://github.com/ShiWarai/whisper-rknn)) — intended for compose / k3s on Orange Pi.
 
-## Features
+## Quick start
 
-- RK3588 NPU Acceleration: Run the Kokoro decoder on the Rockchip RK3588 NPU at ~2.5× RTF (via custom graph rewrites: fixed-stat normalization, Horner minimax Sin approximation, operator folding, and deconv-to-conv transform).
-- Native C++ Library (libkokoro): Zero Python dependency, using ONNX Runtime (CPU/CUDA/TensorRT) or RKNN for inference.
-- English G2P Frontend: Integration with misaki-cpp (English G2P frontend) and espeak-ng.
-- OpenAI-Compatible Server: High-performance HTTP/WebSocket server using Drogon, offering:
-  - POST /v1/audio/speech (OpenAI-compatible TTS)
-  - POST /api/v1/synthesise (one-shot text/phonemes -> opus, pcm, wav, raw)
-  - WS /api/v1/stream (streaming real-time audio)
-  - GET /api/v1/voices (list available voices)
-- Built-in Web UI: A lightweight demo web interface served directly by kokoro-server.
-
-## Project Structure
-
-- build.py: Host-side compilation and graph surgery (PyTorch -> ONNX -> RKNN)
-- infer.py: Board-side Python reference runner (ORT + rknnlite)
-- src/: Native C++ library (libkokoro)
-- cli/: C++ CLI utility (kokoro-cli)
-- server/: C++ Web/API Server (kokoro-server)
-- misaki-cpp/: English G2P submodule
-- NOTES.md: Detailed design & NPU optimization notes
-
-## Python Quick Start (Prototyping / Board)
-
-### 1. Compile RKNN Model (Host)
-Prepare Kokoro weights and kokoro-src, then run:
 ```bash
-python3 build.py
-```
-Outputs: onnx/kokoro_encoder.onnx, onnx/har_generator.onnx, onnx/kokoro_decoder.rknn, and voices_npy/.
+cp .env.example .env
+# KOKORO_MODELS_DIR=/home/orangepi/models/kokoro-rknn-ru
 
-### 2. Run Inference (Board)
-Copy outputs and run:
-```bash
-# English text (needs misaki: pip install "misaki[en]")
-python3 infer.py --text "Hello world." --voice af_heart --out hello.wav
+docker compose build          # first build: espeak + drogon (~10–15 min)
+docker compose up -d --wait   # RKNN init ~2–3 с
+curl -fsS http://127.0.0.1:8848/health   # on the Pi itself
 
-# Or raw IPA phonemes directly
-python3 infer.py --phonemes "həlˈO wˈɜɹld" --voice af_heart --out hello.wav
+# From another PC/phone use the Pi IP, not localhost:
+#   http://10.0.x.x:8848/
 ```
 
-## C++ Quick Start
+GHCR image:
 
-### 1. Requirements
-Ensure the following dependencies are installed:
-- ONNX Runtime C++ API (or RKNN runtime librknnrt)
-- espeak-ng
-- OpenBLAS (for iSTFT sgemm)
-- fmt, spdlog, nlohmann_json
-- For Server: Drogon, Opus, soxr
-
-### 2. Build
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+## Docs
+
+| Doc | Content |
+|-----|---------|
+| [docs/models.md](docs/models.md) | Model volume, HF download, NPU devices |
+| [docs/api.md](docs/api.md) | HTTP/WebSocket API |
+| [docs/cicd.md](docs/cicd.md) | GitHub Actions, GHCR tags |
+| [docs/rknn-hacking.md](docs/rknn-hacking.md) | RKNN graph optimizations |
+
+## Models
+
+Clone once on the host (separate from Piper voices in `/home/orangepi/models/`):
+
+```bash
+git clone https://huggingface.co/ShiWarai/kokoro-rknn-ru /home/orangepi/models/kokoro-rknn-ru
+```
+
+Or let the container download on start: `KOKORO_DOWNLOAD_MODELS=ru` in `.env`.
+
+## Native build (maintainers)
+
+```bash
+git submodule update --init --recursive
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release \
-         -DUSE_RKNN=ON \             # Enable RK3588 NPU acceleration
-         -DBUILD_SERVER=ON \
-         -DBUILD_CLI=ON
-make -j$(nproc)
+cmake .. -DUSE_RKNN=ON -DBUILD_SERVER=ON -DORT_ROOT=/path/to/onnxruntime
+make -j$(nproc) kokoro-server
+
+export KOKORO_MODELS_DIR=/home/orangepi/models/kokoro-rknn-ru
+./kokoro-server --ip 0.0.0.0 --port 8848
 ```
 
-### 3. Run C++ CLI
-```bash
-./kokoro-cli --text "Hello from C++." --voice af_heart --out out.wav
-```
+`build.py` — host-side ONNX/RKNN export only.
 
-### 4. Run C++ Server
-```bash
-./kokoro-server \
-  --encoder onnx/kokoro_encoder.onnx \
-  --har-gen onnx/har_generator.onnx \
-  --decoder onnx/kokoro_decoder.rknn \
-  --vocab Kokoro-82M/config.json \
-  --voices-dir voices_npy \
-  --port 8848
-```
-Visit http://localhost:8848/ in your browser for the Web UI.
+## License
 
-## Optimizations & Performance
-For full technical details about fixed-stat normalization, Horner minimax polynomial approximation for Sin, Pow-to-Mul substitution, Snake1d Conv folding, and custom ConvTranspose padding rewrites, see the ON_RKNN_HACKING.md file.
+MIT. Rockchip `librknnrt.so` in `third_party/` — vendor terms apply.

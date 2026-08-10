@@ -1,78 +1,148 @@
-var ws;
-var ttsSocketURL = (window.location.toString().replace('http', 'ws') + 'api/v1/stream');
-var pcmplayer_opt = {
-     encoding: '16bitInt',
-     channels: 1,
-     sampleRate: 22500,
-     flushingTime: 100
-}
-var player;
+(function () {
+    const textEl = document.getElementById('txt_input');
+    const voiceEl = document.getElementById('voice_select');
+    const speedEl = document.getElementById('speed_range');
+    const speedValEl = document.getElementById('speed_value');
+    const tokenEl = document.getElementById('api_token');
+    const btnRun = document.getElementById('btn_run');
+    const statusEl = document.getElementById('status');
+    const playerWrap = document.getElementById('player_wrap');
+    const audioEl = document.getElementById('audio_out');
+    const btnDownload = document.getElementById('btn_download');
 
-window.onload = function () {
-    let speaker_list = document.getElementById('speaker_select')
-    let speaker_select_label = document.getElementById('speaker_select_label')
-    fetch('/api/v1/speakers').then(function (response) {
-        return response.json();
-    }).then(function (data) {
-        let default_speaker = null
-        // if no speaker is available (i.e. single speaker model), disable the select
-        if(Object.keys(data).length == 0) {
-            speaker_list.disabled = true
-            speaker_select_label.innerHTML = 'Speaker (disabled for single speaker models):'
-            speaker_select_label.classList.add('greyout-text')
-            return
-        }
-        for(let key in data) {
-            let option = document.createElement('option')
-            option.value = data[key]
-            option.text = key
-            speaker_list.appendChild(option)
+    const TOKEN_KEY = 'kokoro_api_token';
 
-            if(data[key] == 0) {
-                default_speaker = data[key]
-            }
-        }
-        speaker_list.value = default_speaker
-    });
-}
+    let lastBlob = null;
+    let busy = false;
 
-function runTTS() {
-    let str = document.getElementById('txt_input').value
-    let speaker = document.getElementById('speaker_select').value
-    let data = JSON.stringify({
-        text: str,
-        speaker_id: parseInt(speaker),
-        audio_format: 'pcm'
-    })
-    if (ws == null || ws.readyState != 1) {
-        player = new PCMPlayer(pcmplayer_opt);
-        reconnectWS(function () {
-            ws.send(data);
-        });
-        return;
+    function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = kind || '';
     }
 
-    ws.send(data);
-}
+    function setBusy(on) {
+        busy = on;
+        btnRun.disabled = on || voiceEl.disabled;
+        btnRun.textContent = on ? 'Синтез…' : 'Синтезировать';
+    }
 
-function reconnectWS(connect_fn) {
-     if (ws) ws.close()
+    function authHeaders() {
+        const token = tokenEl.value.trim();
+        if (!token) return {};
+        return { Authorization: 'Bearer ' + token };
+    }
 
-     ws = new WebSocket(ttsSocketURL);
-     ws.binaryType = 'arraybuffer';
-     ws.addEventListener('open', function (event) {
-          connect_fn && connect_fn()
-     });
-     ws.addEventListener('message', function (event) {
+    speedEl.addEventListener('input', function () {
+        speedValEl.textContent = Number(speedEl.value).toFixed(2);
+    });
 
-          if(typeof event.data == 'string') {
-              let msg = JSON.parse(event.data);
-              if(msg["status"] == "ok")
-                  return;
-              console.error(msg);
-          }
-          var data = new Uint8Array(event.data);
-          if(data.length == 0) return; // ignore empty (pong) messages
-          player.feed(data);
-     });
-}
+    tokenEl.addEventListener('change', function () {
+        localStorage.setItem(TOKEN_KEY, tokenEl.value.trim());
+    });
+
+    const saved = localStorage.getItem(TOKEN_KEY);
+    if (saved) tokenEl.value = saved;
+
+    async function loadVoices() {
+        try {
+            const res = await fetch('/api/v1/voices', { headers: authHeaders() });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const voices = await res.json();
+            voiceEl.innerHTML = '';
+            if (!Array.isArray(voices) || voices.length === 0) {
+                voiceEl.innerHTML = '<option value="">(нет голосов)</option>';
+                setStatus('Сервер не вернул голоса — проверьте модели', 'error');
+                return;
+            }
+            for (const name of voices) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                voiceEl.appendChild(opt);
+            }
+            voiceEl.disabled = false;
+            btnRun.disabled = false;
+            setStatus('Готово · ' + voices.length + ' голос(ов)', 'ok');
+        } catch (err) {
+            voiceEl.innerHTML = '<option value="">ошибка</option>';
+            setStatus('Не удалось загрузить голоса: ' + err.message, 'error');
+        }
+    }
+
+    async function synthesize() {
+        const text = textEl.value.trim();
+        if (!text) {
+            setStatus('Введите текст', 'error');
+            textEl.focus();
+            return;
+        }
+        if (!voiceEl.value) {
+            setStatus('Выберите голос', 'error');
+            return;
+        }
+        if (busy) return;
+
+        setBusy(true);
+        setStatus('Синтез…');
+        playerWrap.classList.remove('visible');
+
+        if (audioEl.src && audioEl.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audioEl.src);
+            audioEl.removeAttribute('src');
+        }
+        lastBlob = null;
+
+        const body = {
+            text: text,
+            voice: voiceEl.value,
+            speed: Number(speedEl.value),
+            audio_format: 'wav',
+        };
+
+        try {
+            const res = await fetch('/api/v1/synthesise', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(errText || ('HTTP ' + res.status));
+            }
+            lastBlob = await res.blob();
+            const url = URL.createObjectURL(lastBlob);
+            audioEl.src = url;
+            playerWrap.classList.add('visible');
+            setStatus('Готово', 'ok');
+            try {
+                await audioEl.play();
+            } catch (_) {
+                /* autoplay blocked */
+            }
+        } catch (err) {
+            setStatus('Ошибка: ' + err.message, 'error');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    btnRun.addEventListener('click', synthesize);
+
+    btnDownload.addEventListener('click', function () {
+        if (!lastBlob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(lastBlob);
+        a.download = 'kokoro-' + voiceEl.value + '.wav';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    });
+
+    textEl.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            synthesize();
+        }
+    });
+
+    loadVoices();
+})();

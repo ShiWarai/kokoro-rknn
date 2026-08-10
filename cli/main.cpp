@@ -16,6 +16,7 @@
 
 #include "g2p.hpp"
 #include "kokoro.hpp"
+#include "paths.hpp"
 #include "phonemizer.hpp"
 
 namespace {
@@ -36,19 +37,24 @@ void writeWav(const std::string& path, const std::vector<int16_t>& pcm, int sr) 
 void usage() {
   std::cerr <<
     "usage: kokoro-cli [--text STR | --phonemes STR] [opts]\n"
-    "  --voice NAME         (default af_heart)\n"
+    "  --voice NAME         (default sveta)\n"
     "  --speed FLOAT        (default 1.0)\n"
     "  --british            use en-gb voice and remap\n"
     "  --out FILE           output wav (default out.wav)\n"
-    "  --encoder FILE       onnx/kokoro_encoder.onnx\n"
-    "  --har-gen FILE       onnx/har_generator.onnx\n"
-    "  --decoder FILE       onnx/kokoro_decoder.onnx or .rknn\n"
-    "  --vocab FILE         Kokoro-82M/config.json\n"
-    "  --voices-dir DIR     voices_npy\n"
+    "  --models-dir DIR     model repo root (or set KOKORO_MODELS_DIR)\n"
+    "  --encoder FILE       pack file (default: <models-dir>/{pack}/ or packs/{pack}/)\n"
+    "  --har-gen FILE       har generator ONNX\n"
+    "  --decoder FILE       decoder .rknn\n"
+    "  --vocab FILE         config.json\n"
+    "  --voices-dir DIR     voices_npy/\n"
     "  --espeak-data DIR    espeak-ng-data (else next to executable)\n"
     "  --lexicon-dir DIR    misaki us/gb JSONs (else next to executable)\n"
     "  --accelerator STR    cuda | tensorrt | (empty)\n"
     "  --debug\n";
+}
+
+const char* packForVoice(const std::string& voice) {
+  return voice == "dima" ? "dima" : "base";
 }
 
 } // namespace
@@ -57,13 +63,14 @@ int main(int argc, char** argv) {
   spdlog::set_default_logger(spdlog::stderr_color_st("kokoro"));
 
   std::string text, phonemes;
-  std::string voice = "af_heart";
+  std::string voice = "sveta";
   std::string out   = "out.wav";
-  std::string encoderPath = "onnx/kokoro_encoder.onnx";
-  std::string harGenPath  = "onnx/har_generator.onnx";
-  std::string decoderPath = "onnx/kokoro_decoder.rknn";
-  std::string vocabPath   = "Kokoro-82M/config.json";
-  std::string voicesDir   = "voices_npy";
+  std::string encoderPath;
+  std::string harGenPath;
+  std::string decoderPath;
+  std::string vocabPath;
+  std::string voicesDir;
+  std::string modelsDir;
   std::string accelerator = "";
   std::string espeakData  = "";
   std::string lexiconDir  = "";
@@ -87,6 +94,7 @@ int main(int argc, char** argv) {
     else if (a == "--decoder")     decoderPath = need();
     else if (a == "--vocab")       vocabPath = need();
     else if (a == "--voices-dir")  voicesDir = need();
+    else if (a == "--models-dir")  modelsDir = need();
     else if (a == "--accelerator") accelerator = need();
     else if (a == "--espeak-data") espeakData = need();
     else if (a == "--lexicon-dir") lexiconDir = need();
@@ -96,18 +104,30 @@ int main(int argc, char** argv) {
   }
 
   if (text.empty() && phonemes.empty()) {
-    phonemes = "h\xC9\x99l\xCB\x88O w\xCB\x88\xC9\x9C\xC9\xB9ld"; // həlˈO wˈɜɹld
-    spdlog::info("(no --text/--phonemes; using demo string)");
+    text = "Привет, как дела?";
+    spdlog::info("(no --text/--phonemes; using Russian demo string)");
   }
 
-  if (espeakData.empty()) {
-    auto exe = std::filesystem::canonical("/proc/self/exe");
-    espeakData = std::filesystem::absolute(exe.parent_path() / "espeak-ng-data").string();
-  }
+  if (!modelsDir.empty())
+    kokoro::paths::setModelsDir(modelsDir);
+
+  const char* pack = packForVoice(voice);
+  auto pick = [&](const std::string& p, const char* file) {
+    return p.empty() ? kokoro::paths::packFile(pack, file)
+                     : kokoro::paths::resolveUserPath(p);
+  };
+  encoderPath = pick(encoderPath, "kokoro_encoder.onnx");
+  harGenPath  = pick(harGenPath,  "har_generator.onnx");
+  decoderPath = pick(decoderPath, "kokoro_decoder.rknn");
+  vocabPath   = pick(vocabPath,   "config.json");
+  voicesDir   = pick(voicesDir,   "voices_npy");
+
+  if (espeakData.empty())
+    espeakData = (kokoro::paths::exeDir() / "espeak-ng-data").string();
   kokoro::Phonemizer::init(espeakData);
 
   if (lexiconDir.empty())
-    lexiconDir = (std::filesystem::current_path() / "misaki-data").string();
+    lexiconDir = (kokoro::paths::exeDir() / "misaki-data").string();
   kokoro::G2P::init(lexiconDir, espeakData);
 
   kokoro::EngineConfig cfg;

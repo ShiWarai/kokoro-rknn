@@ -209,7 +209,7 @@ def export_onnx(kmodel, istftnet, t_fix):
         str(ENC_ONNX),
         input_names=["input_ids", "ref_s", "speed"],
         output_names=["asr", "F0", "N", "s", "pred_dur"],
-        opset_version=17, do_constant_folding=True,
+        opset_version=17, do_constant_folding=True, dynamo=False,
         dynamic_axes={"input_ids": {1: "L"}, "asr": {2: "T"},
                       "F0": {1: "T2"}, "N": {1: "T2"}, "pred_dur": {0: "L"}},
     )
@@ -230,7 +230,7 @@ def export_onnx(kmodel, istftnet, t_fix):
         hg, (torch.randn(1, 2*t_fix).abs() * 200,),
         str(HAR_ONNX),
         input_names=["F0"], output_names=["har"],
-        opset_version=17, do_constant_folding=True,
+        opset_version=17, do_constant_folding=True, dynamo=False,
         dynamic_axes={"F0": {1: "T2"}, "har": {2: "F"}},
     )
 
@@ -246,7 +246,7 @@ def export_onnx(kmodel, istftnet, t_fix):
         str(DEC_RAW),
         input_names=["asr", "F0", "N", "s", "har"],
         output_names=["spec", "phase"],
-        opset_version=17, do_constant_folding=True,
+        opset_version=17, do_constant_folding=True, dynamo=False,
     )
 
 

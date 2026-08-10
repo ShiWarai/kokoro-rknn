@@ -10,6 +10,7 @@
 
 #include "misaki/g2p.hpp"
 #include "phonemizer.hpp"
+#include "ru_g2p.hpp"
 #include "utf8.hpp"
 
 namespace kokoro {
@@ -160,23 +161,24 @@ std::string phonemize_nonenglish(const std::string& text, const std::string& lan
   return out;
 }
 
-struct Route { bool english; bool british; const char* espeak; };
+struct Route { bool english; bool british; bool russian; const char* espeak; };
 Route route(const std::string& voice, bool britishOverride) {
+  if (isRussianVoice(voice)) return {false, false, true, nullptr};
   char p = voice.empty() ? 'a' : voice[0];
   switch (p) {
-    case 'a': return {true, britishOverride, nullptr};
-    case 'b': return {true, true, nullptr};
-    case 'e': return {false, false, "es"};
-    case 'f': return {false, false, "fr"};
-    case 'h': return {false, false, "hi"};
-    case 'i': return {false, false, "it"};
-    case 'p': return {false, false, "pt-br"};
+    case 'a': return {true, britishOverride, false, nullptr};
+    case 'b': return {true, true, false, nullptr};
+    case 'e': return {false, false, false, "es"};
+    case 'f': return {false, false, false, "fr"};
+    case 'h': return {false, false, false, "hi"};
+    case 'i': return {false, false, false, "it"};
+    case 'p': return {false, false, false, "pt-br"};
     case 'j': case 'z':
       spdlog::warn("G2P: voice '{}' ({}) needs a CJK engine; using English",
                    voice, p == 'j' ? "Japanese" : "Chinese");
-      return {true, britishOverride, nullptr};
+      return {true, britishOverride, false, nullptr};
     default:
-      return {true, britishOverride, nullptr};
+      return {true, britishOverride, false, nullptr};
   }
 }
 
@@ -198,6 +200,7 @@ std::string G2P::phonemize(const std::string& text, const std::string& voiceName
                            bool britishOverride) {
   Route r = route(voiceName, britishOverride);
   std::lock_guard<std::mutex> g(g_mu);
+  if (r.russian) return RuG2P::phonemize(text);
   if (r.english) return phonemize_english(text, r.british);
   return phonemize_nonenglish(text, r.espeak);
 }
