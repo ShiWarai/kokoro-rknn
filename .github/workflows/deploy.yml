@@ -121,10 +121,10 @@ jobs:
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: markdown
           message: |
-            *kokoro-rknn: tests failed*
-            Repo: `${{ github.repository }}`
-            Branch: `${{ github.ref_name }}`
-            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            *Тесты не прошли*
+            Репозиторий: `${{ github.repository }}`
+            Ветка: `${{ github.ref_name }}`
+            [Открыть run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Tests OK, prerelease failed
         if: needs.test.result == 'success' && needs.publish-prerelease.result == 'failure'
@@ -135,10 +135,10 @@ jobs:
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: markdown
           message: |
-            *kokoro-rknn: tests OK, prerelease failed*
-            Repo: `${{ github.repository }}`
-            Branch: `${{ github.ref_name }}`
-            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            *Тесты прошли, prerelease не удался*
+            Репозиторий: `${{ github.repository }}`
+            Ветка: `${{ github.ref_name }}`
+            [Открыть run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Tests OK, prerelease published
         if: needs.test.result == 'success' && needs.publish-prerelease.result == 'success'
@@ -150,11 +150,12 @@ jobs:
           format: markdown
           disable_notification: true
           message: |
-            *kokoro-rknn: tests and prerelease OK*
-            Repo: `${{ github.repository }}`
-            Branch: `${{ github.ref_name }}`
-            Image: `ghcr.io/shiwarai/kokoro-rknn:prerelease`
-            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            *Тесты и prerelease успешны*
+            Репозиторий: `${{ github.repository }}`
+            Ветка: `${{ github.ref_name }}`
+            Тег: `:prerelease` и `:${{ github.sha }}`
+            Образ: `ghcr.io/shiwarai/kokoro-rknn:prerelease`
+            [Открыть run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Tests OK (no prerelease)
         if: needs.test.result == 'success' && needs.publish-prerelease.result == 'skipped'
@@ -166,7 +167,7 @@ jobs:
           format: markdown
           disable_notification: true
           message: |
-            *kokoro-rknn: tests passed*
-            Repo: `${{ github.repository }}`
-            Branch: `${{ github.ref_name }}`
-            [Open run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            *Тесты прошли успешно*
+            Репозиторий: `${{ github.repository }}`
+            Ветка: `${{ github.ref_name }}`
+            [Открыть run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
