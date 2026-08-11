@@ -123,7 +123,9 @@ bool checkAuth(const HttpRequestPtr& req) {
 }
 
 bool checkAuthWs(const HttpRequestPtr& req) {
-  return checkAuth(req);
+  if (g_authToken.empty()) return true;
+  if (checkAuth(req)) return true;
+  return req->getParameter("token") == g_authToken;
 }
 
 void addCors(HttpResponsePtr& r, bool allow_auth = true) {
@@ -171,22 +173,22 @@ HttpResponsePtr buildAudioResponse(const std::vector<int16_t>& audio,
   auto r = HttpResponse::newHttpResponse();
   if (format == "mp3") {
     auto mp3 = kokoro_server::encodeMp3(audio.data(), audio.size(), sr);
-    r->addHeader("Content-Type", "audio/mpeg");
+    r->setContentTypeString("audio/mpeg");
     r->setBody(std::string(reinterpret_cast<const char*>(mp3.data()), mp3.size()));
   } else if (format == "wav") {
     std::vector<uint8_t> buf;
     appendWavHeader(buf, sr, 1, static_cast<uint32_t>(audio.size() * 2));
     const auto* pp = reinterpret_cast<const uint8_t*>(audio.data());
     buf.insert(buf.end(), pp, pp + audio.size() * 2);
-    r->addHeader("Content-Type", "audio/wav");
+    r->setContentTypeString("audio/wav");
     r->setBody(std::string(reinterpret_cast<const char*>(buf.data()), buf.size()));
   } else if (format == "pcm" || format == "raw") {
-    r->addHeader("Content-Type", "application/octet-stream");
+    r->setContentTypeString("application/octet-stream");
     r->setBody(std::string(reinterpret_cast<const char*>(audio.data()),
                            audio.size() * sizeof(int16_t)));
   } else if (format == "opus" || format.empty()) {
     auto opus = encodeOgg(std::vector<short>(audio.begin(), audio.end()), sr, 1);
-    r->addHeader("Content-Type", "audio/ogg; codecs=opus");
+    r->setContentTypeString("audio/ogg; codecs=opus");
     r->setBody(std::string(reinterpret_cast<const char*>(opus.data()), opus.size()));
   } else if (format == "aac" || format == "flac") {
     throw std::runtime_error("response_format '" + format + "' is not supported");
@@ -249,6 +251,8 @@ void v1::synthesise(const HttpRequestPtr& req,
     return;
   }
 
+  spdlog::info("synthesis request voice={} format={}", p.voice, p.audio_format);
+
   ensureSynthPool();
   g_synthPool.getNextLoop()->queueInLoop([p = std::move(p),
                                           cb = std::move(cb)]() mutable {
@@ -258,6 +262,7 @@ void v1::synthesise(const HttpRequestPtr& req,
       doSynth(engine, p, [&](const int16_t* d, std::size_t n) {
         audio.insert(audio.end(), d, d + n);
       });
+      spdlog::info("synthesis response {} samples", audio.size());
       cb(buildAudioResponse(audio, p.audio_format, g_pool.sampleRate()));
     } catch (const std::exception& e) {
       cb(badRequest(std::string("synthesis failed: ") + e.what()));
@@ -333,13 +338,18 @@ void v1ws::handleNewMessage(const WebSocketConnectionPtr& ws, std::string&& msg,
       return;
     }
 
+    spdlog::info("stream synthesis request voice={} format={}", p.voice,
+                 p.audio_format);
+
     const int sr = g_pool.sampleRate();
     const bool send_opus = (p.audio_format == "opus" || p.audio_format.empty());
     StreamingOggOpusEncoder enc(sr, 1);
+    std::size_t streamed_samples = 0;
 
     try {
       auto& engine = g_pool.engineFor(p.voice, p.model);
       doSynth(engine, p, [&](const int16_t* d, std::size_t n) {
+        streamed_samples += n;
         if (send_opus) {
           std::vector<short> pcm(d, d + n);
           auto opus = enc.encode(pcm);
@@ -373,6 +383,7 @@ void v1ws::handleNewMessage(const WebSocketConnectionPtr& ws, std::string&& msg,
         wsConn->send(reinterpret_cast<const char*>(tail.data()), tail.size(),
                      WebSocketMessageType::Binary);
     }
+    spdlog::info("stream synthesis complete {} samples", streamed_samples);
     wsConn->send(R"({"status":"ok","message":"finished"})");
   });
 }
@@ -482,6 +493,8 @@ void audio::speech(const HttpRequestPtr& req,
     return;
   }
 
+  spdlog::info("speech request voice={} format={}", p.voice, p.audio_format);
+
   ensureSynthPool();
   g_synthPool.getNextLoop()->queueInLoop([p = std::move(p),
                                           cb = std::move(cb)]() mutable {
@@ -491,6 +504,7 @@ void audio::speech(const HttpRequestPtr& req,
       doSynth(engine, p, [&](const int16_t* d, std::size_t n) {
         audio.insert(audio.end(), d, d + n);
       });
+      spdlog::info("speech response {} samples", audio.size());
       cb(buildAudioResponse(audio, p.audio_format, g_pool.sampleRate()));
     } catch (const std::exception& e) {
       cb(badRequest(std::string("synthesis failed: ") + e.what()));

@@ -197,6 +197,9 @@ int main(int argc, char** argv) {
     }
   }
 
+  // Long buffered synthesis: default idle 60s → 502 behind proxies
+  app().setIdleConnectionTimeout(900);
+
   app().addListener(rc.ip, rc.port).setThreadNum(3).run();
 
   kokoro::G2P::terminate();

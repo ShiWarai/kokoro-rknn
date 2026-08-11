@@ -423,15 +423,19 @@ SynthesisResult Engine::synthesizeIds(const std::vector<int64_t>& ids,
     auto chunks = splitIdsForBert(ids, I.vocab, I.cfg.maxTokens);
     spdlog::info("input {} tokens > {} (BERT limit); split into {} chunks",
                  ids.size(), I.cfg.maxTokens, chunks.size());
+    spdlog::info("synthesis started, {} chunks", chunks.size());
     SynthesisResult total{};
-    for (auto& c : chunks) {
-      SynthesisResult r = synthChunk(I, c, voice, speed, emit);
+    for (std::size_t i = 0; i < chunks.size(); ++i) {
+      SynthesisResult r = synthChunk(I, chunks[i], voice, speed, emit);
       total.encoderSeconds += r.encoderSeconds;
       total.harSeconds     += r.harSeconds;
       total.decoderSeconds += r.decoderSeconds;
       total.istftSeconds   += r.istftSeconds;
       total.audioSeconds   += r.audioSeconds;
+      spdlog::info("chunk {}/{} done ({:.2f}s audio so far)", i + 1,
+                   chunks.size(), total.audioSeconds);
     }
+    spdlog::info("synthesis complete, {:.2f}s audio", total.audioSeconds);
     double infer_total = total.encoderSeconds + total.harSeconds +
                          total.decoderSeconds + total.istftSeconds;
     if (infer_total > 0) total.realTimeFactor = total.audioSeconds / infer_total;

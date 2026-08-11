@@ -11,6 +11,7 @@
     const btnDownload = document.getElementById('btn_download');
 
     const TOKEN_KEY = 'kokoro_api_token';
+    const SAMPLE_RATE = 24000;
 
     let lastBlob = null;
     let busy = false;
@@ -30,6 +31,49 @@
         const token = tokenEl.value.trim();
         if (!token) return {};
         return { Authorization: 'Bearer ' + token };
+    }
+
+    function buildWavBlob(pcmBytes) {
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const blockAlign = numChannels * bitsPerSample / 8;
+        const byteRate = SAMPLE_RATE * blockAlign;
+        const dataSize = pcmBytes.byteLength;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+
+        function writeStr(offset, str) {
+            for (let i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        }
+
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, SAMPLE_RATE, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeStr(36, 'data');
+        view.setUint32(40, dataSize, true);
+        new Uint8Array(buffer, 44).set(pcmBytes);
+
+        return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    function streamUrl() {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let url = protocol + '//' + location.host + '/api/v1/stream';
+        const token = tokenEl.value.trim();
+        if (token) {
+            url += '?token=' + encodeURIComponent(token);
+        }
+        return url;
     }
 
     speedEl.addEventListener('input', function () {
@@ -69,6 +113,56 @@
         }
     }
 
+    function synthesizeViaWebSocket(body) {
+        return new Promise(function (resolve, reject) {
+            const pcmChunks = [];
+            let finished = false;
+            let failed = false;
+            const ws = new WebSocket(streamUrl());
+            ws.binaryType = 'arraybuffer';
+
+            function fail(err) {
+                if (failed || finished) return;
+                failed = true;
+                try { ws.close(); } catch (_) { /* ignore */ }
+                reject(err);
+            }
+
+            ws.onopen = function () {
+                ws.send(JSON.stringify(body));
+            };
+
+            ws.onmessage = function (ev) {
+                if (typeof ev.data === 'string') {
+                    try {
+                        const msg = JSON.parse(ev.data);
+                        if (msg.status === 'ok' && msg.message === 'finished') {
+                            finished = true;
+                            ws.close();
+                            resolve(pcmChunks);
+                        } else if (msg.status === 'failed') {
+                            fail(new Error(msg.message || 'synthesis failed'));
+                        }
+                    } catch (parseErr) {
+                        fail(parseErr);
+                    }
+                } else {
+                    pcmChunks.push(new Uint8Array(ev.data));
+                }
+            };
+
+            ws.onerror = function () {
+                fail(new Error('WebSocket error'));
+            };
+
+            ws.onclose = function (ev) {
+                if (!finished && !failed) {
+                    fail(new Error(ev.reason || 'WebSocket closed'));
+                }
+            };
+        });
+    }
+
     async function synthesize() {
         const text = textEl.value.trim();
         if (!text) {
@@ -96,20 +190,19 @@
             text: text,
             voice: voiceEl.value,
             speed: Number(speedEl.value),
-            audio_format: 'wav',
+            audio_format: 'pcm',
         };
 
         try {
-            const res = await fetch('/api/v1/synthesise', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(errText || ('HTTP ' + res.status));
+            const pcmChunks = await synthesizeViaWebSocket(body);
+            const totalBytes = pcmChunks.reduce(function (sum, c) { return sum + c.length; }, 0);
+            const pcm = new Uint8Array(totalBytes);
+            let offset = 0;
+            for (const chunk of pcmChunks) {
+                pcm.set(chunk, offset);
+                offset += chunk.length;
             }
-            lastBlob = await res.blob();
+            lastBlob = buildWavBlob(pcm);
             const url = URL.createObjectURL(lastBlob);
             audioEl.src = url;
             playerWrap.classList.add('visible');

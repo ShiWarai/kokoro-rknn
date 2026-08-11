@@ -91,7 +91,7 @@ GET /api/v1/voices
 GET /api/v1/speakers
 ```
 
-`WS /api/v1/stream` — JSON body like synthesise; binary opus/pcm chunks.
+`WS /api/v1/stream` — JSON body like synthesise; binary opus/pcm chunks. On connect, send one JSON message; receive binary audio chunks, then `{"status":"ok","message":"finished"}` or `{"status":"failed","message":"..."}`.
 
 ## Auth
 
@@ -112,6 +112,8 @@ Required for all API routes except `/health`. Invalid/missing key → **401**:
   }
 }
 ```
+
+WebSocket auth: `Authorization: Bearer <token>` on the upgrade request, or query `?token=<token>` (browsers cannot set WS headers; the web UI uses `?token=`).
 
 ## Web UI
 
